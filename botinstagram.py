@@ -1,49 +1,75 @@
 import instagram
 import telebot
-import requests
 from PIL import Image
-import urllib
-#TOKEN=
-#URL = 'http://api.telegram.org/bot{0}/getUpdates'.format(TOKEN)
-#bot = telebot.TeleBot(token=TOKEN)
+from config import TOKEN,URL,PATH
+from telegramFunctions import download_from_telegram,insert_data,read_database
+TOKEN = TOKEN
+URL = URL
+bot = telebot.TeleBot(token=TOKEN)
 chat_id = 0
-#path=
-caption_input=False
-waiting=True
-caption=""
+path = PATH
+caption_input = False
+waiting = True
+caption = ""
+helpString = "This bot allows the user to upload photos on instagram only by sending the photo. If you want to upload the photo, send it to the bot"
+# When the bot receives a photo from the user this function is called and
+# it will download the photo from the Telegram API,
 
-helpString="This bot allows the user to upload photos on instagram only by sending the photo. If you want to upload the photo, send it to the bot"
+
 @bot.message_handler(content_types=['photo'])
 def upload_image(message):
-    global caption_input
-    global waiting
-    global caption
-    caption_input=True
+    global caption_input, waiting, caption
+    caption_input = True
     chat_id = message.chat.id
-    print(chat_id)
-    file_id = message.photo[-1].file_id
-    print('The file id is'+file_id)
-    file_info = bot.get_file(file_id)
-    file_name=file_info.file_path[7:]
-    urllib.request.urlretrieve('https://api.telegram.org/file/bot{0}/{1}'.format(TOKEN, file_info.file_path),path+file_name)
-    bot.send_message(chat_id,"Photo received")
-    bot.send_message(chat_id,'Add the caption')
+    file_name = download_from_telegram(
+        message, bot, TOKEN, path)
+    bot.send_message(chat_id, "Photo received")
+    bot.send_message(chat_id, 'Add the caption')
     while(waiting):
         pass
-    
-    instagram.upload_image(path+file_name,caption)
-    waiting=True
-    bot.send_message(chat_id,"Photo uploaded")
+    instagram.upload_image(path+file_name, caption,message.chat.id,message.chat.username)
+    waiting = True
+    bot.send_message(chat_id, "Photo uploaded")
+
+
+
+@bot.message_handler(commands=['prueba'])
+def prueba(message):
+    chat_id = message.chat.id
+    bot.send_message(chat_id, message.text)
+
+
+@bot.message_handler(commands=['login'])
+def login(message):
+    index = message.text.find('@')
+    index1 = message.text.find(' ')
+    ok = insert_data(
+        message.chat.id, message.chat.username, message.text[index1+1:index], message.text[index+1:])
+    if ok == 0:
+        bot.send_message(message.chat.id, "The login was succesful")
+    else:
+        pass
+
 
 @bot.message_handler(commands=['help'])
 def help(message):
-    chat_id=message.chat.id
-    bot.send_message(chat_id,helpString)
+    chat_id = message.chat.id
+    bot.send_message(chat_id, helpString)
+
+
 @bot.message_handler(commands=['start'])
 def welcome(message):
     chat_id = message.chat.id
-    print(chat_id)
-    bot.send_message(chat_id, "Hello "+message.chat.last_name+" this is the demo version")
+    bot.send_message(chat_id, "Hello "+message.chat.username +
+                     " this is the demo version")
+    exist = read_database(
+        message.chat.id, message.chat.username)
+    if exist == None:
+        bot.send_message(
+            chat_id, "Use the /login username@password command to create your account")
+    else:
+        bot.send_message(chat_id, "You are logged in")
+
 
 @bot.message_handler(func=lambda message: True)
 def caption_handler(message):
@@ -51,13 +77,11 @@ def caption_handler(message):
     global waiting
     global caption
     if caption_input:
-        caption=message.text
-        caption_input=False
-        waiting=False
+        caption = message.text
+        caption_input = False
+        waiting = False
     else:
         pass
-
-
 
 
 # Upon calling this function, TeleBot starts polling the Telegram servers for new messages.
@@ -66,5 +90,4 @@ def caption_handler(message):
 #           Note: Editing this parameter harms the bot's response time
 # - timeout: integer (default 20) - Timeout in seconds for long polling.
 if __name__ == "__main__":
-    bot.polling(none_stop=True, interval=0,timeout=20)
-
+    bot.polling(none_stop=True, interval=0, timeout=20)
